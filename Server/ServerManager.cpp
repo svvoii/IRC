@@ -1,6 +1,6 @@
-#include "../includes/ServersManager.hpp"
+#include "ServerManager.hpp"
 
-ServersManager::ServersManager() {
+ServerManager::ServerManager() {
 	std::cout << MAGENTA << "\tServersManager default constructor called" << RESET << std::endl;
 
 	initConfig();
@@ -8,46 +8,43 @@ ServersManager::ServersManager() {
 	initServers();
 
 	// DEBUG PRINT SERVERS DATA
-	for (int i = 0; i < _numberOfServers; i++) {
-
-		_servers[i].printServerData();
-	}
+	_server.printServerData();
 
 	run();
 }
 
-ServersManager::~ServersManager() {
+ServerManager::~ServerManager() {
 
 	std::cout << RED << "\tServersManager destructor called" << RESET << std::endl;
 }
 
-void	ServersManager::initConfig() {
+void	ServerManager::initConfig() {
 
 	// This function is for testing purposes only !!!
 	// The hardcoded data in `Config` class shall be parsed from the config file.
-	_config.setServersData();
-	_numberOfServers = _config.numberOfServers;
+	// _config.setServersData();
+	// _numberOfServers = _config.numberOfServers;
 
-	std::cout << YELLOW << "[!] Number of servers: " << _numberOfServers << RESET << std::endl;
-
-}
-
-void	ServersManager::initServers() {
-	
-	_servers.reserve(_numberOfServers);
-	
-	for (int i = 0; i < _numberOfServers; i++) {
-
-		_servers.push_back(Server(&_config.serversData[i]));
-
-		// the following initialization creates an instance of ListeningSocket on the heap
-		_servers[i].initServerSocket();
-
-	}
+	// std::cout << YELLOW << "[!] Number of servers: " << _numberOfServers << RESET << std::endl;
 
 }
 
-void	ServersManager::_initFdSets() {
+void	ServerManager::initServers() {
+	
+	// _servers.reserve(_numberOfServers);
+	
+	// for (int i = 0; i < _numberOfServers; i++) {
+
+	// 	_servers.push_back(Server(&_config.serversData[i]));
+
+	// 	// the following initialization creates an instance of ListeningSocket on the heap
+	// 	_servers[i].initServerSocket();
+
+	// }
+
+}
+
+void	ServerManager::_initFdSets() {
 
 	FD_ZERO(&_recv_fd_pool);
 	FD_ZERO(&_send_fd_pool);
@@ -55,20 +52,17 @@ void	ServersManager::_initFdSets() {
 	int	serverFd = 0;
 	_max_fd = 0;
 
-	for (int i = 0; i < _numberOfServers; i++) {
+	serverFd = _server.getServerFd();
 
-		serverFd = _servers[i].getServerFd();
+	fcntl_ret = fcntl(serverFd, F_SETFL, O_NONBLOCK);
+	checkErrorAndExit(fcntl_ret, "fcntl() failed. Exiting..");
 
-		fcntl_ret = fcntl(serverFd, F_SETFL, O_NONBLOCK);
-		checkErrorAndExit(fcntl_ret, "fcntl() failed. Exiting..");
+	_addToSet(serverFd, &_recv_fd_pool);
 
-		_addToSet(serverFd, &_recv_fd_pool);
-
-		_max_fd = serverFd;
-	}
+	_max_fd = serverFd;
 }
 
-void	ServersManager::_addToSet(int fd, fd_set *set) {
+void	ServerManager::_addToSet(int fd, fd_set *set) {
 
 	if (fd > _max_fd) {
 		_max_fd = fd;
@@ -76,7 +70,7 @@ void	ServersManager::_addToSet(int fd, fd_set *set) {
 	FD_SET(fd, set);
 }
 
-void	ServersManager::_removeFromSet(int fd, fd_set *set) {
+void	ServerManager::_removeFromSet(int fd, fd_set *set) {
 
 	if (fd == _max_fd) {
 		_max_fd--;
@@ -84,7 +78,7 @@ void	ServersManager::_removeFromSet(int fd, fd_set *set) {
 	FD_CLR(fd, set);
 }
 
-void	ServersManager::_closeConnection(int fd) {
+void	ServerManager::_closeConnection(int fd) {
 	std::cout << timeStamp() << YELLOW << "[!] Closing connection with fd:[" << fd << "]." << RESET << std::endl;
 
 	if (FD_ISSET(fd, &_recv_fd_pool)) {
@@ -97,7 +91,7 @@ void	ServersManager::_closeConnection(int fd) {
 	clientsMap.erase(fd);
 }
 
-std::string	ServersManager::timeStamp() {
+std::string	ServerManager::timeStamp() {
 
 	std::time_t currentTime = std::time(NULL);
     std::tm* now = std::localtime(&currentTime);
@@ -107,7 +101,7 @@ std::string	ServersManager::timeStamp() {
 	return std::string(buffer);
 }
 
-void	ServersManager::checkErrorAndExit(int returnValue, const std::string& msg) {
+void	ServerManager::checkErrorAndExit(int returnValue, const std::string& msg) {
 
 	if (returnValue == -1) {
 
@@ -116,7 +110,7 @@ void	ServersManager::checkErrorAndExit(int returnValue, const std::string& msg) 
 	}
 }
 
-void	ServersManager::run() {
+void	ServerManager::run() {
 
 	fd_set	recv_fd_pool_copy;
 	fd_set	send_fd_pool_copy;
@@ -153,7 +147,7 @@ void	ServersManager::run() {
 	}
 }
 
-void	ServersManager::_accept(int fd) {
+void	ServerManager::_accept(int fd) {
 
 	struct sockaddr_in	address;
 	socklen_t			address_len = sizeof(address);
@@ -168,7 +162,7 @@ void	ServersManager::_accept(int fd) {
 		return ;
 	}
 
-	std::cout << timeStamp() << GREEN << "[+] New connection to [" << _servers[serverFd - 3].getServerName() << "] fd:[" << serverFd << "], client fd:[" << fd << "], IP:[" << inet_ntoa(address.sin_addr) << "]" << RESET << std::endl;
+	std::cout << timeStamp() << GREEN << "[+] New connection to [" << _server.getServerName() << "] fd:[" << serverFd << "], client fd:[" << fd << "], IP:[" << inet_ntoa(address.sin_addr) << "]" << RESET << std::endl;
 
 	_addToSet(fd, &_recv_fd_pool);
 
@@ -188,7 +182,7 @@ void	ServersManager::_accept(int fd) {
 	clientsMap.insert(std::make_pair(fd, buff));
 }
 
-void	ServersManager::_handle(int fd) {
+void	ServerManager::_handle(int fd) {
 
 	char	buffer[BUF_SIZE] = {0};
 	int		bytes_read = 0;
@@ -213,10 +207,10 @@ void	ServersManager::_handle(int fd) {
 
 	std::cout << CYAN << "[*] Request received from client fd:[" << fd << "]" << RESET << std::endl;
 
-	HttpRequest 	httpRequest(clientsMap[fd].requestBuffer);
+	// HttpRequest 	httpRequest(clientsMap[fd].requestBuffer);
 
-	HttpResponse	response(&httpRequest);
-	clientsMap[fd].responseBuffer = response.getResponse();
+	// HttpResponse	response(&httpRequest);
+	// clientsMap[fd].responseBuffer = response.getResponse();
 
 	// might need to check if the body is not empty and handle CGI and other stuff
 
@@ -224,7 +218,7 @@ void	ServersManager::_handle(int fd) {
 	_addToSet(fd, &_send_fd_pool);
 }
 
-void	ServersManager::_respond(int fd) {
+void	ServerManager::_respond(int fd) {
 
 	int		bytes_sent = 0;
 	int		bytes_to_send = clientsMap[fd].responseBuffer.length();
@@ -254,7 +248,7 @@ void	ServersManager::_respond(int fd) {
 	clientsMap[fd].responseBuffer.clear();
 }
 
-bool	ServersManager::isClient(int fd) {
+bool	ServerManager::isClient(int fd) {
 
 	return clientsMap.count(fd) > 0;
 }

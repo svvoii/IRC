@@ -1,15 +1,5 @@
-/*
-** This class is set to create and manage the servers.
-** The `Config` class will be used to get the data from the config file,
-** and pass it to each server instance created.
-**
-** I/O MULTIPLEXING will be used to handle the connections to 
-** each server with the help of the `select()` function, as well as
-** the `fd_set` structure, and `fcntl()` function to set the socket
-** to non-blocking mode.
-*/
-#ifndef SERVERSMANAGER_HPP
-#define SERVERSMANAGER_HPP
+#ifndef SERVERMANAGER_HPP
+#define SERVERMANAGER_HPP
 
 #include "Server.hpp"
 
@@ -27,13 +17,10 @@ typedef struct s_buffer {
 
 } t_buffer;
 
-class ServersManager {
+class ServerManager {
 	private:
 
-		//Config						_config;
-		int							_numberOfServers;
 		Server						_server;
-		//std::vector<Server>			_servers;
 
 		fd_set						_recv_fd_pool; // To store the socket FDs of the clients
 		fd_set						_send_fd_pool; // To store the socket FDs of the clients
@@ -50,8 +37,8 @@ class ServersManager {
 
 	public:
 
-		ServersManager();
-		~ServersManager();
+		ServerManager();
+		~ServerManager();
 
 		std::map<int, t_buffer>		clientsMap;
 
@@ -61,11 +48,6 @@ class ServersManager {
 		void						run();
 		bool						isClient(int fd);
 
-		// Setters
-		void						initConfig();
-		void						initServers();
-
 };
-
 
 #endif

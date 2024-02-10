@@ -1,23 +1,19 @@
 
-NAME = webserv
+NAME = irsserv
 
 CXX = c++
 CXXFLAGS = -Wall -Werror -Wextra -std=c++98 -g
 
-VPATH = Sockets/src \
-		Servers/src \
-		Config \
+VPATH = Sockets \
+		Server
 
 SRCS = main.cpp \
 	SimpleSocket.cpp \
 	BindingSocket.cpp \
 	ListeningSocket.cpp \
 	ConnectingSocket.cpp \
-	HttpRequest.cpp \
-	HttpResponse.cpp \
 	Server.cpp \
-	ServersManager.cpp \
-	Config.cpp \
+	ServersManager.cpp
 
 OBJS = $(SRCS:.cpp=.o)
 
