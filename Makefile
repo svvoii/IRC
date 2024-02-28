@@ -7,8 +7,8 @@ CXXFLAGS = -Wall -Werror -Wextra -std=c++98 -g
 VPATH = Server \
 		Commands \
 		Request \
-		User \
-		Channel
+		Channel \
+		User
 
 SRCS = main.cpp \
 	Server.cpp \
@@ -16,8 +16,8 @@ SRCS = main.cpp \
 	UserRequestParsing.cpp \
 	CommandHandler.cpp \
 	UserResponse.cpp \
-	User.cpp \
-	Channel.cpp
+	Channel.cpp \
+	User.cpp
 
 OBJS = $(SRCS:.cpp=.o)
 
@@ -28,11 +28,15 @@ $(NAME): $(OBJS)
 # cleaning the objects right after make
 	make clean
 
+bot:
+	$(MAKE) -C Bot
+	mv Bot/bot .
+
 clean:
 	rm -f $(OBJS)
 
 fclean: clean
-	rm -f $(NAME)
+	rm -f $(NAME) bot
 
 re: fclean all
 

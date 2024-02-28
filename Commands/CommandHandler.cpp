@@ -1,8 +1,8 @@
 #include "CommandHandler.hpp"
 #include "../User/User.hpp"
 
-CommandHandler::CommandHandler(User &usr, map<string, string> &commands) :
-	user(usr), commandsFromClient(commands) { 
+CommandHandler::CommandHandler(ServerManager& srv, User &usr, map<string, string> &commands) :
+	server(srv), user(usr), commandsFromClient(commands) { 
 
 	// Filling in the `mapEnumToString` map to convert enum to string, this will help to identify the command and execute when needed
 	mapEnumToString[NONE] = "NONE";
@@ -35,6 +35,12 @@ CommandHandler::CommandHandler(User &usr, map<string, string> &commands) :
 	cmdToHandler["PASS"] = &CommandHandler::handlePASS;
 	cmdToHandler["NICK"] = &CommandHandler::handleNICK;
 	cmdToHandler["USER"] = &CommandHandler::handleUSER;
+	cmdToHandler["JOIN"] = &CommandHandler::handleJOIN;
+	cmdToHandler["PRIVMSG"] = &CommandHandler::handlePRIVMSG;
+	cmdToHandler["TOPIC"] = &CommandHandler::handleTOPIC;
+	cmdToHandler["INVITE"] = &CommandHandler::handleINVITE;
+	cmdToHandler["KICK"] = &CommandHandler::handleKICK;
+	cmdToHandler["MODE"] = &CommandHandler::handleMODE;
 	// .. and so on
 
 
@@ -133,80 +139,155 @@ void	CommandHandler::handlePASS() {
 void	CommandHandler::handleNICK() {
 	std::cout << YELLOW << "NICK command received.." << RESET << std::endl;
 
-	user.setNickname(commandsFromClient["NICK"]);
+	user.setNickName(commandsFromClient["NICK"]);
 }
 
 void	CommandHandler::handleUSER() {
 	std::cout << YELLOW << "USER command received.." << RESET << std::endl;
 
-	user.setUsername(commandsFromClient["USER"]);
+	user.setUserName(commandsFromClient["USER"]);
+}
+
+void	CommandHandler::handleJOIN() {
+
+	std::cout << YELLOW << "JOIN command received.." << RESET << std::endl;
+
+	// format : /join #channel (password)
+	const std::string channel;
+	const std::string password;
+	
+	if (server.channelMap.find(channel) == server.channelMap.end())
+	{
+		Channel new_channel(channel);
+		server.setChannel(new_channel);
+		user.setChannel(new_channel);
+		user.getChannel(channel).setUser(user);
+		if (password.empty() == false)
+			user.getChannel(channel).setKey(password);
+	}
+	else
+	{
+		if (server.channelMap[channel]->getProtected() == true)
+		{
+			if (server.channelMap[channel]->getKey() != password)
+				return;
+		}
+		user.setChannel(server.getChannel(channel));
+		server.getChannel(channel).setUser(user);
+	}
+
+}
+
+void	CommandHandler::handlePRIVMSG() {
+
+	std::cout << YELLOW << "PRIVMSG command received.." << RESET << std::endl;
+
+	// format : /msg nickname <message>
+	// I have to verify that the other user-nickname is in the channel too
+
 }
 
 void	CommandHandler::handleINVITE() {
 
 	std::cout << YELLOW << "INVITE command received.." << RESET << std::endl;
 
-	// format de la commade : /INVITE nickname #channel
+	// format : /INVITE nickname #channel
+	
+	// envoie une notification au user/nickname
+	// il doit toujours join
 }
-
-/* The following code wont compile yet.. requires the Channel class to be implemented first
 
 void	CommandHandler::handleTOPIC()	{
 
 	std::cout << YELLOW << "TOPIC command received.." << RESET << std::endl;
 
-	// format de la commande : /TOPIC #channel 
+ 	// format : /TOPIC #channel 
 
-	std::cout << channel.getTheme() << std::endl;
+	std::string channel; 
+	std::string topic;	
 
-	// if param apres le nom du channel
-	if (user.getCanModifyTopic() == true)
+	// without params after channel, simply print the topic of the channel
+	if (topic.empty() == true)
 	{
-		channel.setTheme(new_theme);
+		std::cout << user.getChannel(channel).getTheme() << std::endl;
+		return;
 	}
+	// else s' il y a un param apres le nom du channel
+	// check si le channel est restricted dans la modif du topic
+	if (user.getChannel(channel).getTopicRestricted() == true)
+	{
+		// check du coup if user is op in this channel
+		vector<string>::iterator it;
+		vector<string>:: iterator last = user.getChannel(channel)._ops.end();
+		for(it = user.getChannel(channel)._ops.begin(); it != last; ++it)
+		{
+			if (*it == user.getNickName())
+				break;
+		}
+		// not found / return
+		if (it == last)
+			return;
+	}
+	// si pas de restrictions ou user was op then modify topic
+	user.getChannel(channel).setTheme(topic);
 }
 
 void	CommandHandler::handleKICK()
 {
-	std::cout << YELLOW << "KICK command received.." << RESET << std::endl;
+ 	std::cout << YELLOW << "KICK command received.." << RESET << std::endl;
 
-	if (user.getIsOp() == false)
-		return;
+	std::string channel;
+	std::string nickname;
 
 	// format de la commande : /KICK #channel nickname
+	vector<string>::iterator it;
+	vector<string>:: iterator last = user.getChannel(channel)._ops.end();
+	for(it = user.getChannel(channel)._ops.begin(); it != last; ++it)
+	{
+		if (*it == nickname)
+			break;
+	}
+	if (it == last)
+		return;
+	if (user._channels.find(nickname) != user._channels.end())
+	{
+		user.getChannel(channel).getUser(nickname).removeChannel(channel);
+		user.getChannel(channel).removeUser(nickname);
+		// remove aussi dans le server_manager si il y aura une copie des channels 
+	}
 }
 
 void	CommandHandler::handleMODE()
 {
 	std::cout << YELLOW << "MODE command received.." << RESET << std::endl;
 
-	if (user.getIsOp() == false)
-		return;
 	
-	//format de la commande :  /mode #channel flag
-	std::string channel;
-	std::string flag;
+	// format :  /mode #channel flag
+	std::string flag; 
+
 
 	if(flag == "-i")								
 	{
-		if (user.getChannel(channel))
-		if (channel.getInvit() == true) 
-			channel.setInvit(false);
+		if (_channel->getInvit() == true) 
+			_channel->setInvit(false);
 	}
 	else if(flag  == "+i") 					
 	{
-		if (channel.getInvit() == false)
-			channel.setInvit(true);
+		if (_channel->getInvit() == false)
+			_channel->setInvit(true);
 	}
-	else if(flag == "-t")					
+	else if(flag == "-t")
+	// I think here the characteristic of the channel needs to be changed, ie, 
+	// +t = the channel topic can be set only by the chanop, -t = any chan member can set the topic 					
+	// Source: https://datatracker.ietf.org/doc/html/rfc1459#section-4.2.3.1 
 	{
-		if (user.getCanModifyTopic() == true)
-				user.setCanModifyTopic(false);
+		if (_channel->getTopicRestricted() == true)
+			_channel->setTopicRestricted(false);
 	}
 	else if(flag == "+t")						
 	{
-		if (user.getCanModifyTopic() == false)
-				user.setCanModifyTopic(true);
+		if (_channel->getTopicRestricted() == false)
+			_channel->setTopicRestricted(true);
 	}
 	else if(flag == "-k")							
 	{
@@ -217,7 +298,11 @@ void	CommandHandler::handleMODE()
 		// definir un mot de passe				// /mode #channel +k password
 	}
 	else if(flag == "-o")
-		;										// /mode #channel -o user
+	{
+		// format : /mode #channel -o nickname
+
+		
+	}							
 	else if(flag == "+o")
 		;										// /mode #channel +o user
 	else if(flag == "-l")
@@ -227,4 +312,3 @@ void	CommandHandler::handleMODE()
 	// else
 	// 	; // error unknown flag or parsed before ?
 }
-*/
