@@ -22,9 +22,12 @@
 			bool							_protected; // has password;
 
 		public :
+			Channel() {}
 			Channel(const std::string& name);
+			// Channel(const Channel& copy);
+			// Channel& operator=( const Channel& src );
 			~Channel();
-			std::map<std::string, User*> 	_users;
+			std::map<std::string, User> 	_users;
 			std::vector<std::string>		_ops;
 			// setters 
 			void	setName(const std::string & name);
@@ -41,8 +44,7 @@
 			const std::string& 	getName( void ) const;
 			const std::string& 	getTheme( void ) const;
 			const std::string&	getKey( void ) const;
-			User& getUser( const std::string & nickname ) const;
-			const std::map<std::string, User*>& getUsers( void ) const;
+			User& getUser( const std::string & nickname );
 			const std::string& getOp( const std::string & nickname ) const;
 			const int& getNb( void ) const;
 			const int& getLimit( void ) const;
@@ -50,9 +52,13 @@
 			const bool& getTopicRestricted() const;
 			const bool& getProtected() const;
 
-			void	removeUser(const std::string nickname);
+			bool	isOp(const std::string& nickname);
+			void	removeUser(const std::string& nickname);
 			void	removeOp(const std::string& opNickname);
+			void	removeLimit();
+			void	broadcast(std::string msg);
 			void	printUsers( void ) const; // for debug
+			void	printOps( void) const; // for debug
 	};
 
 #endif

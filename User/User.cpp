@@ -2,15 +2,57 @@
 #include "../Channel/Channel.hpp"
 #include <iostream> 
 
-// User::User(const int& fd) : _socket(fd)
+User::User() : 
+	_port(0), 
+	_socket(0), 
+	_hostName(""), 
+	_nickName(""), 
+	_userName(""), 
+	_realName(""),
+	_password(""), 
+	userMessageBuffer(""),
+	responseBuffer(""),
+	_authenticated(false), 
+	_handshaked(false),
+	isBot(false) {
+
+};
+
+// User::User(const User& copy)
 // {
-// 	//std::cout << "User has been created" << std::endl;
+// 	*this = copy;
 // }
 
-// User::~User()
+// User& User::operator=(const User& src)
 // {
-// 	//std::cout << "User " << _userName << " has been destructed" << std::endl;
+// 	if (*this != src)
+// 	{
+// 		_port = src._port;
+// 		_socket = src._socket;
+// 		_hostName = src._hostName;
+// 		_nickName = src._nickName;
+// 		_userName = src._userName;
+// 		_realName = src._realName;
+// 		_password = src._password;
+// 		userMessageBuffer = src.userMessageBuffer;
+// 		responseBuffer = src.responseBuffer;
+// 		_authenticated = src._authenticated;
+// 		_handshaked = src._handshaked;
+// 		isBot = src.isBot;
+// 		std::map<std::string, Channel*>::const_iterator it;
+// 		for(it = src._channels.begin(); it != src._channels.end(); ++it)
+// 		{
+// 			Channel *new_channel = new Channel(*it->second);
+// 			_channels[it->first] = new_channel;
+// 		}
+// 	}
+// 	return *this;
 // }
+
+User::~User()
+{
+	//std::cout << "User " << _userName << " has been destroyed" << std::endl;
+}
 
 // --------------------------------------- SETTERS ---------------------------------------- // 
 
@@ -44,6 +86,11 @@ void 	User::setHostName(const std::string& hostname)
 	_hostName = hostname;
 }
 
+void	User::setRealName(const std::string& realname)
+{
+	_realName = realname;
+}
+
 void 	User::setPassword(const std::string& password)
 {
 	_password = password;
@@ -53,7 +100,17 @@ void	User::setChannel(Channel& channel)
 {
 	if (_channels.find(channel.getName()) != _channels.end()) // si le channel est deja dans User
 		return;
-	_channels[channel.getName()] = &channel;
+	_channels.insert(std::make_pair(channel.getName(), channel));
+}
+
+void	User::setAsBot()
+{
+	isBot = true;
+}
+
+void	User::setPinged(bool pinged)
+{
+	_pinged = pinged;
 }
 
 // ---------------------------------------- GETTERS ----------------------------------------- // 
@@ -61,6 +118,8 @@ void	User::setChannel(Channel& channel)
 bool	User::authenticated() { return this->_authenticated; }
 
 bool	User::handshaked() { return this->_handshaked; }
+
+bool	User::pinged() { return this->_pinged; }
 
 const int& User::getPort( void ) const
 {
@@ -87,39 +146,37 @@ const std::string& User::getHostName( void ) const
 	return _hostName;
 }
 
+const std::string& User::getRealName() const 
+{
+	return _realName;
+}
+
 const std::string& User::getPassword( void ) const
 {
 	return _password;
 }
 
-Channel& User::getChannel( const std::string& name ) const
+Channel& User::getChannel( const std::string& name )
 {
-	return *_channels.at(name);
+	std::map<std::string, Channel>::iterator it = _channels.find(name);
+	return it->second;
 }
-
-const std::map<std::string, Channel*>& User::getChannels( void ) const
-{
-	return _channels;
-} 
 
 // fonction membres 
 
 void	User::removeChannel(const std::string& channelName)
 {
-	std::map<std::string, Channel*>::iterator it;
+	std::map<std::string, Channel>::iterator it;
 	it = _channels.find(channelName);
     if (it != _channels.end())
-	{
-		_channels[channelName]->removeUser(_nickName);
         _channels.erase(it);
-	}
 }
 
 void User::printChannels( void ) const
 {
-	std::map<std::string, Channel*>::const_iterator it;
+	std::map<std::string, Channel>::const_iterator it;
 
     std::cout << "Channels in this user:" << std::endl;
     for ( it = _channels.begin(); it != _channels.end(); ++it)
-        std::cout << it->second->getName() << std::endl;
+        std::cout << it->second.getName() << std::endl;
 }

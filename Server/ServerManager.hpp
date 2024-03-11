@@ -2,7 +2,9 @@
 #define SERVERMANAGER_HPP
 
 #include "Server.hpp"
+#include "../Commands/CommandHandler.hpp"
 #include "../Request/UserRequestParsing.hpp"
+#include "../Request/Request.hpp"
 #include "UserResponse.hpp"
 #include "../User/User.hpp"
 #include <sys/types.h>  // for u_long
@@ -13,54 +15,10 @@
 #include <list> // std::list
 #include <ctime> // std::time_t
 #include <netinet/in.h>
+#include <signal.h> // For signal handling
 
 #define BUF_SIZE	10240
 #define MSG_SIZE	512 // 512 bytes is the maximum length of a message in the IRC protocol
-
-/*
-** This class here is for testing and easier further integration ..
-class User {
-	
-	private:
-		int				port;
-		int				socket;
-		std::string		hostName; // ..parsed in `UserRequestParsing` class..
-		std::string		nickName; // ..parsed in `UserRequestParsing` class..
-		std::string		userName; // ..parsed in `UserRequestParsing` class..
-		std::string		password; // ..parsed in `UserRequestParsing` class..
-		bool			_authenticated; // ..to use for new User verification (NICK, USER, PASS)
-		bool			_handshaked; // ..to use for composing the first response message to the client (RPL_WELCOME, RPL_YOURHOST, RPL_CREATED, RPL_MYINFO..) 
-		
-	public:
-		std::string		userMessageBuffer;
-		std::string		responseBuffer;
-
-		User() : port(0), socket(0), hostName(""), nickName(""), userName(""), password(""), _authenticated(false), _handshaked(false) {};
-		~User() {};
-
-		// Setters
-		void			setPort(int & port) { this->port = port; }
-		void			setSocket(int & socket) { this->socket = socket; }
-		void			setHostName(std::string const & hostName) { this->hostName = hostName; }
-		void			setNickName(std::string const & nickName) { this->nickName = nickName; }
-		void			setUserName(std::string const & userName) { this->userName = userName; }
-		void			setPassword(std::string const & password) { this->password = password; }
-		void			setAuthenticated(bool authenticated) { this->_authenticated = authenticated; }
-		void			setHandshaked(bool handshaked) { this->_handshaked = handshaked; }
-
-		// Getters
-		const int &		getPort() const { return this->port; }
-		const int &		getSocket() const { return this->socket; }
-		const std::string &	getHostName() const { return this->hostName; }
-		const std::string &	getNickName() const { return this->nickName; }
-		const std::string &	getUserName() const { return this->userName; }
-		const std::string &	getPassword() const { return this->password; }
-		bool			authenticated() { return this->_authenticated; }
-		bool			handshaked() { return this->_handshaked; }
-
-};
-*/
-/* ***** */
 
 class ServerManager {
 
@@ -71,6 +29,7 @@ class ServerManager {
 		fd_set						_send_fd_pool; // To store the socket FDs of the Users
 		int							_serverFd; // The server's socket FD
 		int							_max_fd; // To track the max value of the socket FD, needed for `select()` function and for loop in `run()`
+		bool						_sigInt; // To control the main loop of the server
 
 		// Main logic to run the servers, receive, handle and respond to the requests
 		void						_run();
@@ -86,9 +45,10 @@ class ServerManager {
 
 	public:
 		// `UserMap` key is the User's socket FD and the value is the User object
-		std::map<int, User>			usersMap;
+		std::map<int, User>				usersMap; // int is fd 
 		// Add Channel map here of all created channels
-		std::map<std::string, Channel *>	channelMap;
+		std::map<std::string, Channel>	channelMap;
+		int								error;
 
 		ServerManager();
 		~ServerManager();
@@ -102,9 +62,21 @@ class ServerManager {
 		void						checkErrorAndExit(int returnValue, const std::string& msg);
 		void						log(int UserFd);
 		bool						isClient(int fd);
-		void						setChannel(Channel& channel);
-		Channel& 					getChannel( const std::string& name ) const;
+		void						setChannel(const Channel& channel);
+		Channel& 					getChannel( const std::string& name );
+		int 						getFdbyNickName( const std::string& nickname ) const;
+
+		// All this is necessary for the signal handling (to be able to close the socket and exit properly)
+		// `signaHandler()` must be static, as well as anything it operates on.
+		// `SM_instance` is a pointer to the ServerManager instance, so that the `signalHandler` can call `handleSignal()`.
+		static 	ServerManager*	SM_instance;
+		static void	signalhandler(int signal);
+		void		handleSignal();
 
 };
+
+std::vector<std::string> split(const std::string& input, const std::string& delimiter);
+void	trim(std::string &str, std::string delimiter);
+int		noCRLFinBuffer(std::string const& buffer);
 
 #endif

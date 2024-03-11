@@ -10,6 +10,34 @@ Channel::Channel(const std::string& name) : _name(name), _nb(0), _limited(false)
 	//std::cout << "Channel " << _name << " has been created" << std::endl;
 }
 
+// Channel::Channel(const Channel& copy) 
+// {
+// 	*this = copy;
+// }
+
+// Channel& Channel::operator=(const Channel& src )
+// {
+// 	if (*this != src)
+// 	{
+// 		_name = src._name;
+// 		_theme = src._theme;
+// 		_key = src._key;
+// 		_nb = src._nb;
+// 		_limit = src._limit;
+// 		_limited = src._limited;
+// 		_invit_only = src._invit_only;
+// 		_topic_restricted = src._topic_restricted;
+// 		_protected = src._protected;
+// 		std::map<std::string, User>::const_iterator it;
+// 		for (it = src._users.begin(); it != src._users.end(); ++it)
+// 		{
+// 			_users[it->first] = it->second;
+// 		}
+// 		_ops = src._ops;
+// 	}
+// 	return *this;
+// }
+
 Channel::~Channel()
 {
 	//std::cout << "Channel " << _name << " has been destructed" << std::endl;
@@ -47,13 +75,17 @@ void	Channel::setUser(User& user)
 			return;
 		}
 	}
-	_users[user.getNickName()] = &user;
+	_users[user.getNickName()] = user;
 	user.setChannel(*this);
 	_nb++;
 }
 
 void	Channel::setOp(const std::string& nickname)
 {
+	// protection si le nickname n'existe pas dans le channel
+	if (_users.find(nickname) == _users.end())
+		return; 
+
 	// Les opérateurs du canal sont généralement désignés par un symbole "@" 
 	// devant leur nom d'utilisateur dans la liste des utilisateurs du canal.
 	std::string opNickname = "@" + nickname;
@@ -69,6 +101,7 @@ void	Channel::setNb(const int& nb)
 void	Channel::setLimit(const int & limit)
 {
 	_limit = limit;
+	_limited = true;
 }
 
 void	Channel::setInvit(const bool & invit)
@@ -103,14 +136,9 @@ const std::string&	Channel::getKey( void ) const
 	return _key;
 }
 
-User& Channel::getUser( const std::string & nickname ) const
+User& Channel::getUser( const std::string & nickname )
 {
-	return *_users.at(nickname);
-}
-
-const std::map<std::string, User*>& 	Channel::getUsers( void ) const
-{
-	return _users;
+	return _users.at(nickname);
 }
 
 const std::string& Channel::getOp( const std::string & nickname ) const
@@ -151,14 +179,25 @@ const bool& Channel::getProtected() const
 
 // ------------------- MEMBER FUNCTIONS ---------------------- // 
 
-void	Channel::removeUser(const std::string nickname)
+bool	Channel::isOp(const std::string& nickname)
 {
+	vector<string>::iterator it;
+	vector<string>:: iterator last = _ops.end();
 
-	std::map<std::string, User*>::iterator it;
+	for(it = _ops.begin(); it != last; ++it)
+	{
+		if (*it == nickname)
+			return true;
+	}
+	return false;
+}
+
+void	Channel::removeUser(const std::string& nickname)
+{
+	std::map<std::string, User>::iterator it;
 	it = _users.find(nickname);
     if (it != _users.end())
 	{
-		_users[nickname]->removeChannel(_name);
         _users.erase(it);
 		_nb--;
 	}
@@ -175,15 +214,35 @@ void	Channel::removeOp(const std::string& opNickname)
             break; 
         }
     }
-	
-	
+}
+
+void	Channel::removeLimit()
+{
+	_limited = false;
+}
+
+void	Channel::broadcast(std::string msg)
+{
+	std::map<std::string, User>::iterator it;
+
+	for(it = _users.begin(); it != _users.end(); ++it)
+		it->second.userMessageBuffer = msg;
 }
 
 void Channel::printUsers( void) const
 {
-	std::map<std::string, User*>::const_iterator it;
+	std::map<std::string, User>::const_iterator it;
 
     std::cout << "Users in this channel:" << std::endl;
     for ( it = _users.begin(); it != _users.end(); ++it)
-        std::cout << it->second->getNickName() << std::endl;
+        std::cout << it->second.getNickName() << std::endl;
+}
+
+void Channel::printOps( void) const
+{
+	std::vector<std::string>::const_iterator it;
+
+    std::cout << "Ops in this channel:" << std::endl;
+    for ( it = _ops.begin(); it != _ops.end(); ++it)
+        std::cout << *it << std::endl;
 }

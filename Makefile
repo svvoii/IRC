@@ -15,8 +15,10 @@ SRCS = main.cpp \
 	ServerManager.cpp \
 	UserRequestParsing.cpp \
 	CommandHandler.cpp \
+	ModeHandler.cpp \
 	UserResponse.cpp \
 	Channel.cpp \
+	Request.cpp \
 	User.cpp
 
 OBJS = $(SRCS:.cpp=.o)
@@ -27,6 +29,10 @@ $(NAME): $(OBJS)
 	$(CXX) $(CXXFLAGS) $(OBJS) -o $(NAME)
 # cleaning the objects right after make
 	make clean
+
+valgrind: $(NAME)
+	clear
+	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --track-fds=all ./$(NAME)
 
 bot:
 	$(MAKE) -C Bot

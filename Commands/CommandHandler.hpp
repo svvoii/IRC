@@ -1,12 +1,15 @@
 #ifndef COMMANDHANDLER_HPP
 #define COMMANDHANDLER_HPP
 
-#include "../Request/UserRequestParsing.hpp"
+// #include "../Request/UserRequestParsing.hpp"
 #include "../Channel/Channel.hpp"
+#include "../Server/ServerManager.hpp"
+#include "ModeHandler.hpp"
 
 using namespace std;
 
 class User;
+class ServerManager;
 class ServerManager;
 
 /*
@@ -17,41 +20,44 @@ typedef enum requestCMD {
 
 	NONE,
 	CAP,
-	INFO,
+	INFO, //
 	INVITE,
 	JOIN,
 	KICK,
-	LIST,
+	LIST, //
 	MODE,
-	NAMES,
-	NICK,
-	NOTICE,
+	NAMES, //
+	NICK, 
+	NOTICE, //
 	OPER,
 	PART,
 	PASS,
 	PING,
 	PONG,
 	PRIVMSG,
-	QUIT,
+	QUIT, // 
 	TOPIC,
 	USER,
-	VERSION,
-	WHO,
-	WHOIS
+	VERSION,//
+	WHO,//
+	WHOIS//
 
 }	e_cmd;
-
 
 class CommandHandler {
 
 	public:
 
-		ServerManager					&server;
-		User							&user;
-		map<string, string>				&commandsFromClient;
-		map<e_cmd, string>				mapEnumToString; // map to convert CMD enum to string
+		ServerManager								&server;
+		User										&user;
+		map<string, string>							&commandsFromClient;
+		map<e_cmd, string>							mapEnumToString; // map to convert CMD enum to string
 		map<string, void (CommandHandler::*)() >	cmdToHandler; // map to convert CMD to handler method
-		Channel*							_channel; // pointer to channel, if channel concerned. pointer so it can be NULL.
+		// std::string									channelName;
+		// std::string									password;
+		// bool										errChannelName;
+		std::string									param1;
+		std::string									param2;
 		CommandHandler(ServerManager& srv, User &usr, map<string, string> &commands);
 		~CommandHandler();
 
@@ -67,12 +73,17 @@ class CommandHandler {
 		void				handlePASS();
 		void				handleNICK();
 		void				handleUSER();
+		void				handlePING();
 		void				handleJOIN();
 		void				handlePRIVMSG();
 		void				handleMODE();
 		void				handleKICK();
 		void				handleINVITE();
 		void				handleTOPIC();
+	
+
+		//COMMAND UTILS
+		const std::string	parse_channelName(std::string& channelName);
 };
 
 #endif
