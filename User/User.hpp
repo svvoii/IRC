@@ -2,8 +2,11 @@
 # define USER_HPP
 
 	#include <string>
+	#include <sstream>
 	#include <map>
-	#include "../Channel/Channel.hpp"
+	//#include "../Channel/Channel.hpp"
+
+	class Channel;
 
 	class User {
 
@@ -29,8 +32,9 @@
 		bool							_authenticated;
 		bool							_handshaked;
 		bool							_pinged;
-
+		bool							_cap;
 		bool							isBot;
+
 		// Setters //
 		void	setPort(const int& port);
 		void	setSocket(const int& socket);
@@ -53,6 +57,7 @@
 		const std::string& getRealName() const;
 		const std::string& getPassword( void ) const;
 		Channel& getChannel( const std::string& name );
+		std::string			getPrefix();
 		bool	authenticated();
 		bool	handshaked();
 		bool	pinged();

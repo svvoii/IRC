@@ -14,6 +14,8 @@ User::User() :
 	responseBuffer(""),
 	_authenticated(false), 
 	_handshaked(false),
+	_pinged(false),
+	_cap(false),
 	isBot(false) {
 
 };
@@ -163,6 +165,15 @@ Channel& User::getChannel( const std::string& name )
 }
 
 // fonction membres 
+
+std::string	User::getPrefix()
+{
+	std::stringstream prefix;
+	prefix << ":" << _nickName << "!" << _userName;
+	if (!_hostName.empty())
+		prefix << "@" << _hostName;
+	return (prefix.str());
+}
 
 void	User::removeChannel(const std::string& channelName)
 {

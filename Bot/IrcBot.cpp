@@ -58,9 +58,9 @@ void IrcBot::connectToServer() {
 	checkErrorAndExit(returnValue, "ERROR: connecting to server [" + _serverName + "] failed. Make sure the server is up..\n");
 
 	if (!signalErrorFlag) {
-		std::cout << "Connected to server: " << _serverName << " on port: " << _serverPort << std::endl;
-		std::cout << "Bot name: " << _botName << std::endl;
-		std::cout << "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - " << std::endl;
+		std::cout << "Connected to server: " << YELLOW << _serverName << RESET << " on port: " << YELLOW << _serverPort << RESET << std::endl;
+		std::cout << "Bot name: " << BLUE << _botName << RESET << std::endl;
+		std::cout << "- - - - - - - - - - - - - - - - - - -" << std::endl;
 	}
 
 }
@@ -112,9 +112,15 @@ void IrcBot::handleServerRequest() {
 
 }
 
+/*
+** `handleResponse` is functioning as follows:
+** 1. Check if there is `PRIVMSG` in the request and substring the message only.. and send it to the GPT container to process.
+** 2. If there is `PING` in the request, send `PONG` back to the server.
+** 3. Technicaly, there should not be commands other that `PRIVMSG` and `PING` in the request comming from the server.
+*/
 void IrcBot::handleResponse() {
 
-	std::cout << "Request from the server, RAW: " << _serverRequestBuffer << std::endl;
+	// std::cout << YELLOW << "Request, RAW: " << MAGENTA << _serverRequestBuffer << RESET << std::endl;
 
 	/* DEBUG */
 	// Check the string for (001 or 002, 003, 004).. if there means the bot is authenticated/registered on the server side
@@ -122,32 +128,109 @@ void IrcBot::handleResponse() {
 		_authenticated = true;
 
 		joinChannel("#helpdesk");
-		sendMessage("#helpdesk", "Hi there! I'm NeoBot. I'm here to help. Type 'DO_THE_THING: <question>' to get started.");
+		// sendMessage("#helpdesk", "Hi there! I'm NeoBot. I'm here to help. Type 'DO_THE_THING: <question>' to get started.");
 	}
-	
 	/* ***** */
 
-	std::string request = _serverRequestBuffer;
+	std::string prompt = _serverRequestBuffer;
 
-	if (request.find("PRIVMSG") != std::string::npos) {
-		std::string sender = request.substr(1, request.find("!") - 1);
-		std::string message = request.substr(request.find("PRIVMSG") + 8);
-		std::cout << "Message from " << sender << ": " << message << std::endl;
-	}
-	else if (request.find("PING") != std::string::npos) {
-		sendIrcMessage("PONG " + request.substr(5));
-	}
-	else if (request.find("DO_THE_THING") != std::string::npos) {
+	if (prompt.find("PRIVMSG") != std::string::npos) {
 
-		std::string toErase = "DO_THE_THING:";
-		size_t pos = _serverRequestBuffer.find(toErase);
-		if (pos != std::string::npos) {
-			_serverRequestBuffer.erase(pos, toErase.length());
+		// getting the nick of the sender
+		std::string sender = prompt.substr(1, prompt.find("!") - 1);
+
+		// removing the beginnign of the prompt up to the bot name
+		prompt = prompt.substr(prompt.find(_botName) + _botName.length());
+
+		// trimming the prompt
+		prompt.erase(0, prompt.find_first_not_of(" "));
+
+		std::cout << YELLOW << sender << RESET << ": " << MAGENTA << prompt << RESET << std::endl;
+
+		// sending the prompt to the GPT container to process via API
+		handleGPT(prompt);
+
+		/* DEBUG */
+		std::cout << BLUE << _botName << RESET << ": " << CYAN << _responseGPT << RESET << std::endl;
+
+		sendMessage("#helpdesk", _responseGPT);
+		std::cout << "- - - - - - - - - - - -" << std::endl;
+	}
+	if (prompt.find("PING") != std::string::npos) {
+		/* DEBUG */
+		std::cout << YELLOW << "..ping received.. sending pong.." << YELLOW << std::endl;
+		/* ***** */
+		sendIrcMessage("PONG " + prompt.substr(5));
+	}
+	
+}
+
+/*
+** Here we use so called `named pipes` to communicate with the GPT container.
+** Also known as `FIFO` (First In First Out).
+** The host_to_container.fifo is used to send/write the request string to the container.
+** The container_to_host.fifo is used to receive/read the response from the container.
+** Inside the container environment we have a python app that handles the requests to 
+** and responce from OpenAI's GPT via API.
+*/
+void IrcBot::handleGPT(const std::string& prompt) {
+
+	// removing the container_to_host.txt file
+	// std::ofstream ofs;
+	// ofs.open("./Bot/GPT/host_to_container.txt", std::ofstream::out | std::ofstream::trunc);
+	// ofs.close();
+
+
+	std::ofstream outfile("./Bot/GPT/host_to_container.txt");
+	if (outfile.is_open()) {
+		outfile << prompt;
+	}
+	else {
+		std::cerr << RED << "Error opening host_to_container for writing" << RESET << std::endl;
+		return;
+	}
+	outfile.close();
+
+	// making sure the responce is complete before reading it
+	while (!fileExists("./Bot/GPT/container_to_host.txt")) {
+		// waiting for the file toread from
+	}
+
+	std::ifstream infile("./Bot/GPT/container_to_host.txt");
+	if (infile.is_open()) {
+		
+		std::string line;
+		_responseGPT.clear();
+
+		// this will read from the file until the end of the file or an error occurs
+		while (infile) {
+
+			std::getline(infile, line);
+
+			if (infile) {
+				_responseGPT += line;
+			}
 		}
-
-		// handleGPT();
-
+		_responseGPT + "\r\n";
 	}
+	else {
+		std::cerr << RED << "Error opening container_to_host for reading" << RESET << std::endl;
+		return;
+	}
+	infile.close();
+
+	// removing the container_to_host.txt file
+	if (remove("./Bot/GPT/container_to_host.txt") != 0) {
+		std::cerr << RED << "Error deleting container_to_host" << RESET << std::endl;
+	}
+	else {
+		// std::cout << GREEN << "container_to_host.txt deleted" << RESET << std::endl;
+	}
+}
+
+bool IrcBot::fileExists(const std::string& fileName) {
+	std::ifstream infile(fileName.c_str());
+	return infile.good();
 }
 
 void IrcBot::checkErrorAndExit(int returnValue, const std::string& message) {
@@ -178,28 +261,6 @@ void IrcBot::handleSignal() {
 	
 } 
 
-/*
-** Here we use so called `named pipes` to communicate with the GPT container.
-** Also known as `FIFO` (First In First Out).
-** The host_to_container.fifo is used to send/write the request string to the container.
-** The container_to_host.fifo is used to receive/read the response from the container.
-** Inside the container environment we have a python app that handles the requests to 
-** and responce from OpenAI's GPT via API.
-*/
-void IrcBot::handleGPT() {
-
-	std::ofstream host_to_container("./GPT/host_to_container.fifo");
-	host_to_container << _serverRequestBuffer;
-	host_to_container.close();
-
-	std::ifstream container_to_host("./GPT/container_to_host.fifo");
-	std::getline(container_to_host, _responseGPT);
-	container_to_host.close();
-
-	// _responseGPT must be sent back to the server..
-	std::cout << "GPT response: " << _responseGPT << std::endl;
-
-}
 
 /*
 ** This function is used to establish a connection to the server.

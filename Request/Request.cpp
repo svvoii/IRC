@@ -22,19 +22,28 @@ void	Request::parse_args()
 		return ;
 	if (_input_buffer[0] == '/') //trimming initial slash, if it exists, and \r\n
 		_input_buffer.erase(_input_buffer.begin());
-	for (size_t i = _input_buffer.find_last_of('\n', '\r'); i != std::string::npos;)
+	for (size_t i = _input_buffer.find_last_of("\r\n"); i != std::string::npos;)
 	{
 		_input_buffer.erase(i);
-		i = _input_buffer.find_last_of('\n', '\r');
+		i = _input_buffer.find_last_of("\r\n");
 	}
+	if (_input_buffer.empty()) // si rien dans le buffer
+		_input_map.insert(std::make_pair("command", "NONE")); //
 	size_t i = _input_buffer.find_first_of(' ');
 	if (i != std::string::npos)
 	{
 		_input_map.insert(std::make_pair("command", _input_buffer.substr(0, i)));
 		_input_map.insert(std::make_pair("params", _input_buffer.substr(i + 1)));
-		//parse_params();
 	}
+	else
+		_input_map.insert(std::make_pair("command", _input_buffer));
+	
 	check_command_valid(_input_map["command"]);
+	if (_input_map.find("params") == _input_map.end() || _input_map["params"].empty())
+	{
+		//user.responseBuffer = ERR_NEEDMOREPARAMS(_input_map["command"]); /// pas de user dans Request
+		return;
+	}
 	if (DEBUG)
 	{
 		print_map();
@@ -79,25 +88,6 @@ void	Request::check_command_valid(std::string& command)
 	if (DEBUG)
 		std::cout << "_request_valid is set as " << std::boolalpha << _request_valid << std::endl;
 }
-
-// void	Request::parse_params()
-// {
-// 	bool hash = false;
-
-// 	// check if there is only one channel in the params
-// 	std::string::iterator it = _input_map["params"].begin();
-
-// 	for ( ; it != _input_map["params"].end(); ++it)
-// 	{
-// 		if (*it == '#' && hash == false)
-// 			hash = true;
-// 		else if (*it == '#' && hash == true)
-// 		{
-// 			_server.error = 461; // two many channels
-// 			return;
-// 		}
-// 	}
-// }
 
 /*GETTERS*/
 

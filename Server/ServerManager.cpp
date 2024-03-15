@@ -10,7 +10,6 @@ ServerManager::ServerManager() {
 	_serverFd = _server.getServerFd();
 	_max_fd = _serverFd;
 	_sigInt = false;
-
 	// DEBUG PRINT SERVERS DATA
 	_server.printServerData();
 
@@ -134,7 +133,7 @@ void	ServerManager::_handle(int fd) {
 
 	/* DEBUG */
 	std::cout << timeStamp();
-	std::cout << std::endl << MAGENTA << "bytes read:" << bytes_read << std::endl;
+	std::cout << std::endl << MAGENTA << "bytes read:" << bytes_read << " Buffer: " << buffer << std::endl;
 	/* ****** */
 
 	if (bytes_read == 0) {
@@ -161,34 +160,56 @@ void	ServerManager::_handle(int fd) {
 
 	User &user = usersMap[fd];
 	if (noCRLFinBuffer(user.userMessageBuffer))
-	{
 		return ; // if no `\n` found in the buffer, we wait for the next read from this client fd
+	if (noPassInCmd(user.userMessageBuffer) && user.getPassword().empty())
+	{
+		/*DEBUG*/
+		std::cerr << RED << "Password not set\n" << RESET;
+		/**/
+		std::string str = ":localhost 451 :Set password first\r\n";
+		write(fd, str.c_str(), str.size());
+		_closeConnection(fd);
+		return ;
 	}
 	vector<string> splitMessageBuffer = split(user.userMessageBuffer, "\n");
-	for (vector<string>::iterator it = splitMessageBuffer.begin(); it != splitMessageBuffer.end(); it++)
+	for (vector<string>::iterator it = splitMessageBuffer.begin(); it != splitMessageBuffer.end(); it++) //handling pass command first
 	{	
-		std::cout << MAGENTA << *it << RESET << std::endl;
-		Request	userRequest(*this, *it);
-		
-		/* DEBUG */
-		map<string, string> input_map = userRequest.getRequestMap();
-		map<string, string>::iterator it2 = input_map.begin();
-		for (; it2 != input_map.end(); it2++)
+		if (it->find("pass") == 0 || it->find("PASS") == 0)
 		{
-			std::cout << MAGENTA << it2->first << ": " << it2->second << RESET << std::endl;
+			Request	userRequest(*this, *it);
+			map<string, string> input_map = userRequest.getRequestMap();
+			CommandHandler cmdHandler(*this, user, input_map);
+			splitMessageBuffer.erase(it);
+			break ;
 		}
-		/* ***** */
-
-		CommandHandler cmdHandler(*this, user, input_map);
 	}
-	user.userMessageBuffer.clear();
+	if (user.getPassword() == this->getPassword())
+	{
+		for (vector<string>::iterator it = splitMessageBuffer.begin(); it != splitMessageBuffer.end(); it++)
+		{	
+			std::cout << MAGENTA << *it << RESET << std::endl;
+			Request	userRequest(*this, *it);
+			map<string, string> input_map = userRequest.getRequestMap();
+			CommandHandler cmdHandler(*this, user, input_map);
+		}
+	}
+	else
+	{
+		/*DEBUG*/
+		std::cerr << RED << "Password wrong\n" << RESET;
+		/**/
+		std::string str = ERR_PASSWDMISMATCH;
+		write(fd, str.c_str(), str.size());
+		_closeConnection(fd);
+		return ;
+	}
+	// user.userMessageBuffer.clear();
 
 	// We add the client's fd to the send_fd_pool once the client is authenticated (received NICK, USER, PASS..)
-	if (user.authenticated()) {
+	// if (user.authenticated()) {
 		_removeFromSet(fd, &_recv_fd_pool);
 		_addToSet(fd, &_send_fd_pool);
-	}
-
+	// }
 }
 
 /*
@@ -215,6 +236,7 @@ void	ServerManager::_respond(int fd) {
 	else {
 		/* DEBUG */
 		std::cout << GREEN << "[+] Response sent to client fd:[" << fd << "]";
+		std::cout << "Response message: " << user.responseBuffer;
 		std::cout << ", bytes sent: [" << bytes_sent << "]" << RESET << std::endl;
 		std::cout << ". . . . . . . . . . . . . . . . . . . . . . . . . . . " << std::endl;
 		// std::cout << CYAN;
@@ -223,14 +245,14 @@ void	ServerManager::_respond(int fd) {
 		/* ***** */
 	}
 
-	if (user.handshaked() == true) {
+	// if (user.handshaked() == true) {
 
 		_removeFromSet(fd, &_send_fd_pool);
 		_addToSet(fd, &_recv_fd_pool);
 
 		user.userMessageBuffer.clear();
 		user.responseBuffer.clear();
-	}
+	// }
 }
 
 
@@ -378,52 +400,36 @@ int ServerManager::getFdbyNickName( const std::string& nickname ) const
 	return -1;
 }
 
-/*UTILS*/
+/*
+** This function is called in asituation when a user sends a message to a channel
+** i.e. `PRIVMSG #channel :message` where the message needs to be broadcasted to all users in the channel
+** In here we just add all the users to `_send_fd_pool` so that select picks them up
+** and calls `_respond` to send the message user by user.
+** The `responseBuffer` of each user is set to the message to be sent in `Channel::broadcast()`.
+*/
+void	ServerManager::setBroadcast(std::string channelName, std::string sender_nick, std::string msg) {
 
-// split splits string input at every occurence of string delimiter, and returns a vector
-std::vector<std::string> split(const std::string& input, const std::string& delimiter) 
-{
-    std::vector<std::string> tokens;
-    size_t lastPos = 0;
-    size_t pos = input.find(delimiter, lastPos);
-    while (pos != std::string::npos)
-	{
-		string str = input.substr(lastPos, pos - lastPos);
-		if (!str.empty()) {
-			tokens.push_back(str);}
-		lastPos = pos + delimiter.length();
-		pos = input.find(delimiter, lastPos);
-    }
-	string str = input.substr(lastPos);
-	if (!str.empty()) {
-    	tokens.push_back(str);}
-    return tokens;
+	std::map<string, User>::iterator it;
+
+	for (it = channelMap[channelName]._users.begin(); it != channelMap[channelName]._users.end(); it++) {
+
+		if (it->second.getNickName() != sender_nick)
+			setBroadcast(msg, it->second.getSocket());
+	}
 }
 
-void trim(std::string &str, std::string delimiter)
-{
-	size_t start = str.find_first_not_of(delimiter);
-    if (start != std::string::npos) {
-		str = str.substr(start);
-    } 
-	else {
-		str.clear(); // Entire string is whitespace
-        return;
-    }
-    size_t end = str.find_last_not_of(delimiter);
-    if (end != std::string::npos) {
-        str = str.substr(0, end + 1);
-    } else {
-        str.clear(); // Entire string is whitespace
-    }
-}
+/*
+** This function overloads the previous one and is used to send a message to a specific user
+*/
+void	ServerManager::setBroadcast(std::string msg, int fd) {
 
-int	noCRLFinBuffer(std::string const& buffer)
-{
-	size_t crlf = buffer.find("\n");
-	if (crlf == std::string::npos)
-		return 1;
-	return 0;
+	std::map<int, User>::iterator it = usersMap.find(fd);
+
+	// THE MESSAGE `msg` TO BE SENT MUST BE ALREADY PROPERLY FORMATTED..
+	// it->second.responseBuffer = it->second.getPrefix() + " PRIVMSG " + it->second.getChannel() + " :" + msg + "\r\n";
+	it->second.responseBuffer += msg;
+
+	_addToSet(fd, &_send_fd_pool);
 }
 
 /*
@@ -444,11 +450,16 @@ void	ServerManager::signalhandler(int signal) {
 
 void	ServerManager::handleSignal() {
 
-	// Closing all available connections and terminating the main server loop..
+	// Closing all available connections, cleaning up and terminating the main loop..
 
 	for (int fd = _max_fd; fd >= _serverFd; fd--) {
 		_closeConnection(fd);
 	}
 
 	_sigInt = true;
+}
+
+std::string const&	ServerManager::getPassword() const
+{
+	return (_server.getServerPassword());
 }

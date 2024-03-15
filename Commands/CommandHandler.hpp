@@ -1,9 +1,10 @@
 #ifndef COMMANDHANDLER_HPP
 #define COMMANDHANDLER_HPP
 
-// #include "../Request/UserRequestParsing.hpp"
 #include "../Channel/Channel.hpp"
 #include "../Server/ServerManager.hpp"
+#include "../Server/server_utils.hpp"
+
 #include "ModeHandler.hpp"
 
 using namespace std;
@@ -46,6 +47,9 @@ typedef enum requestCMD {
 
 class CommandHandler {
 
+	private:
+		void				sendHandshake();
+
 	public:
 
 		ServerManager								&server;
@@ -80,8 +84,9 @@ class CommandHandler {
 		void				handleKICK();
 		void				handleINVITE();
 		void				handleTOPIC();
+		void				handlePART();
+		void				handleQUIT();
 	
-
 		//COMMAND UTILS
 		const std::string	parse_channelName(std::string& channelName);
 };
