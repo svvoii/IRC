@@ -43,7 +43,6 @@ CommandHandler::CommandHandler(ServerManager& srv, User &usr, map<string, string
 	cmdToHandler["MODE"] = &CommandHandler::handleMODE;
 	cmdToHandler["PING"] = &CommandHandler::handlePING;
 	cmdToHandler["PART"] = &CommandHandler::handlePART;
-	cmdToHandler["QUIT"] = &CommandHandler::handleQUIT;
 	// .. and so on
 
 	// executeCommand();
@@ -95,9 +94,9 @@ const std::string	CommandHandler::parse_channelName(std::string& channelName)
 void	CommandHandler::authenticateUser() {
 
 	// if user is not authenticated, we search for the PASS, NICK and USER commands first
-	if (commandsFromClient["command"] == "CAP") {
-		handleCAP(); // this one might not be needed
-	}
+	// if (commandsFromClient["command"] == "CAP") {
+	// 	handleCAP(); // this one might not be needed
+	// }
 	// if (commandsFromClient.find("NICK") != commandsFromClient.end()) {
 	if (commandsFromClient["command"] == "NICK") {
 		handleNICK();
@@ -146,14 +145,12 @@ void	CommandHandler::handleNONE() {
 	std::cout << RED << "[-] command not found.." << RESET << std::endl;
 	if (commandsFromClient.find("command") == commandsFromClient.end())
 		return ;
-	user.responseBuffer = ":localhost 421 ";
-	user.responseBuffer += commandsFromClient["command"];
-	user.responseBuffer += " :Unknown command";
+	server.setBroadcast(ERR_UNKNOWNCOMMAND(commandsFromClient["command"]), user.getSocket());
 }
 
 void	CommandHandler::handleCAP() {
 	std::cout << YELLOW << "CAP command received.." << RESET << std::endl;
-	user._cap = true;
+	// user._cap = true;
 }
 
 void	CommandHandler::handlePASS() {
@@ -215,8 +212,12 @@ void	CommandHandler::handleUSER() {
 		return ;
 	}
 	std::vector<std::string> params = split(commandsFromClient["params"], " ");
-	vector<string>::iterator hostnameIt = params.begin() + 1;
-	vector<string>::iterator realnameIt = params.begin() + 3;
+	vector<string>::iterator hostnameIt = params.end();
+	vector<string>::iterator realnameIt = params.end();
+	if (params.size() >= 2)
+		hostnameIt = params.begin() + 1;
+	if (params.size() >= 4)
+		realnameIt = params.begin() + 3;
 	for (vector<string>::iterator it = params.begin(); it != params.end(); it++)
 	{
 		if (it == params.begin()) {
@@ -256,7 +257,7 @@ void	CommandHandler::handleJOIN() {
 		;
 	else
 	{
-		if (params.begin() != params.end())
+		if (!params.empty())
 			user.responseBuffer = ERR_TOOMANYTARGETS(*(params.end() - 1));
 		return;
 	}
@@ -277,11 +278,12 @@ void	CommandHandler::handleJOIN() {
 			new_channel.setKey(*(params.begin() + 1));
 		server.setChannel(new_channel);
 		user.setChannel(new_channel);
-		user.responseBuffer += user.getPrefix() + " JOIN " + channelName + "\r\n";
+		user.responseBuffer = user.getPrefix() + " JOIN " + channelName + "\r\n";
 		std::string topic = server.channelMap[channelName].getTheme();
-		// if (!topic.empty())
-		user.responseBuffer += RPL_TOPIC(channelName, topic);
-		user.responseBuffer += "\r\n";
+		if (topic.empty())
+			user.responseBuffer += RPL_NOTOPIC(channelName);
+		else
+			user.responseBuffer += RPL_TOPIC(channelName, topic);
 	}
 	// if channel already exists
 	else
@@ -312,9 +314,11 @@ void	CommandHandler::handleJOIN() {
 			// add the user
 			user.setChannel(server.getChannel(channelName));
 			server.channelMap[channelName].setUser(user);
-			user.responseBuffer += user.getPrefix() + " JOIN " + channelName + "\r\n";
+			user.responseBuffer = user.getPrefix() + " JOIN " + channelName + "\r\n";
 			std::string topic = server.channelMap[channelName].getTheme();
-			if (!topic.empty())
+			if (topic.empty())
+				user.responseBuffer += RPL_NOTOPIC(channelName);
+			else
 				user.responseBuffer += RPL_TOPIC(channelName, topic);
 		}
 		else
@@ -544,8 +548,12 @@ void	CommandHandler::handleKICK()
 void	CommandHandler::handleMODE()
 {
 	std::cout << YELLOW << "MODE command received.." << RESET << std::endl;
-	
-	ModeHandler	mode_handler(commandsFromClient, server, user);
+
+	try {
+		ModeHandler	mode_handler(commandsFromClient, server, user);
+	}
+	catch (std::exception &e) {
+	}
 }
 
 void	CommandHandler::handlePING()
@@ -557,7 +565,7 @@ void	CommandHandler::handlePING()
 
 void	CommandHandler::handlePART()
 {
-	std::cout << YELLOW << "PART command received.." << RESET << std::endl;
+	std::cout << YELLOW << "PING command received.." << RESET << std::endl;
 	
 	// format: /PART #channel [message]
 	std::string channelName;
@@ -579,33 +587,11 @@ void	CommandHandler::handlePART()
 		user.responseBuffer = ERR_USERNOTINCHANNEL(user.getNickName(), channelName); 
 		return;
 	}
-	if (msg.empty() == false)
-		handlePRIVMSG();
 	user._channels[channelName].removeUser(user.getNickName());
 	user.removeChannel(channelName);
-	if (msg.empty())
-		user.responseBuffer = user.getPrefix() + " PART " + channelName + "\r\n";
-}
-
-/*
-** Once the user sends the QUIT command, the server will notify all the users in all channels this user in 
-** that the user has left the chat.
-** Then the server will close the connection with the user.
-*/
-void	CommandHandler::handleQUIT()
-{
-	std::cout << YELLOW << "QUIT command received.." << RESET << std::endl;
-
-	// calling the `handlePART` method to remove the user from all channels
-	std::map<std::string, Channel>::iterator it = user._channels.begin();
-	for ( ; it != user._channels.end(); ++it)
-	{
-		handlePART();
-	}	
-
-	// closing the connection with the user
-	// server._closeConnection(user.getSocket());
-	
+	user.responseBuffer = RPL_PART(user.getPrefix(), channelName, msg);
+	server.setBroadcast(channelName, user.getNickName(), user.responseBuffer);
+	server.channelMap[channelName].removeUser(user.getNickName());
 }
 
 void	CommandHandler::sendHandshake()

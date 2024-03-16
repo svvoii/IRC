@@ -11,7 +11,7 @@
 #define ERR_ALREADYREGISTRED ":localhost 462 ::Unauthorized command (already registered)\r\n"
 #define ERR_PASSWDMISMATCH ":localhost 464 :Password incorrect\r\n"
 #define PING(servername) ("PING :" + servername + "\r\n")
-#define ERR_UNKNOWNCOMMAND(command) (":localhost 421 " + command " :Unknown command\r\n")
+#define ERR_UNKNOWNCOMMAND(command) (":localhost 421 " + command + " :Unknown command\r\n")
 
 /*PRIVMSG*/
 #define ERR_NOSUCHNICK(nickname) (":localhost 401 " + nickname + " :No such nick\r\n")
@@ -54,6 +54,9 @@
 #define ERR_INVITEONLYCHAN(channel) (":localhost 473 " + channel + " :Cannot join channel (+i)\r\n")
 #define ERR_BADCHANNELKEY(channel) (":localhost 475 " + channel + " :Cannot join channel (+k)\r\n")
 //                 ERR_TOOMANYCHANNELS
+
+/*PART COMMAND*/
+# define RPL_PART(user_id, channel, reason) (user_id + " PART " + channel + " " + (reason.empty() ? "." : reason ) + "\r\n")
 
 /*OPERATOR REPLY*/
 # define RPL_YOUREOPER(nick) (":localhost 381 " + nick + " :You are now an IRC operator\r\n")
