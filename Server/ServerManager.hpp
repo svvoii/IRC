@@ -6,7 +6,7 @@
 #include "../Commands/CommandHandler.hpp"
 #include "../Request/UserRequestParsing.hpp"
 #include "../Request/Request.hpp"
-#include "UserResponse.hpp"
+#include "../Request/server_replies.h"
 #include "../User/User.hpp"
 #include <sys/types.h>  // for u_long
 #include <sys/select.h> // for fd_set
@@ -50,7 +50,7 @@ class ServerManager {
 		// Add Channel map here of all created channels
 		std::map<std::string, Channel>	channelMap;
 
-		ServerManager();
+		ServerManager(int port, std::string const& password);
 		~ServerManager();
 
 		// Initializing User's data. Command Passing.

@@ -1,6 +1,6 @@
 #include "ServerManager.hpp"
 
-ServerManager::ServerManager() {
+ServerManager::ServerManager(int port, std::string const& password) : _server(Server(port, password)) {
 
 	SM_instance = this; // This is needed for the signal handling
 
@@ -123,16 +123,10 @@ void	ServerManager::_accept(int clientFd) {
 */
 void	ServerManager::_handle(int fd) {
 
-	// char	buffer[BUF_SIZE] = {0};
 	char	buffer[MSG_SIZE] = {0};
 	int		bytes_read = 0;
 
 	bytes_read = read(fd, buffer, MSG_SIZE - 1); // -1 to leave space for the null terminator
-
-	/* DEBUG */
-	std::cout << timeStamp();
-	std::cout << std::endl << MAGENTA << "bytes read:" << bytes_read << " Buffer: " << buffer << std::endl;
-	/* ****** */
 
 	if (bytes_read == 0) {
 		std::cout << YELLOW << "[!] bytes_read == 0 from client fd:[" << fd << "]" << RESET << std::endl;
@@ -145,68 +139,37 @@ void	ServerManager::_handle(int fd) {
 		return ;
 	}
 
-	// UsersMap[fd].requestBuffer.append(buffer, bytes_read);
-	usersMap[fd].userMessageBuffer += std::string(buffer, bytes_read);
+	User &user = usersMap[fd];
+
+	user.userMessageBuffer += std::string(buffer, bytes_read);
+
+	if (noCRLFinBuffer(user.userMessageBuffer))
+		return ; // if no `\n` found in the buffer, we wait for the next read from this client fd
 
 	/* DEBUG */
-	std::cout << std::endl << MAGENTA << "USER MESSAGE BUFFER: " << usersMap[fd].userMessageBuffer << std::endl;
-	std::cout << "Size of user msg buffer: " << usersMap[fd].userMessageBuffer.size() << std::endl;
-	std::cout << CYAN << "[*] received from client fd[" << fd << "]: " << RESET << std::endl;
-	// std::cout << MAGENTA << usersMap[fd].userMessageBuffer << RESET;
+	std::cout << timeStamp();
+	std::cout << CYAN << "bytes read: [" << bytes_read << "] USER MESSAGE BUFFER: " << MAGENTA << usersMap[fd].userMessageBuffer;
+	std::cout << CYAN << "Size of user msg buffer: " << user.userMessageBuffer.size() << std::endl;
+	std::cout << CYAN << "[*] client fd[" << fd << "]: " << RESET << std::endl;
 	std::cout << CYAN << "parsing..." << RESET << std::endl;
 	/* ***** */
 
-	User &user = usersMap[fd];
-	if (noCRLFinBuffer(user.userMessageBuffer))
-		return ; // if no `\n` found in the buffer, we wait for the next read from this client fd
-	if (noPassInCmd(user.userMessageBuffer) && user.getPassword().empty())
-	{
-		/*DEBUG*/
-		std::cerr << RED << "Password not set\n" << RESET;
-		/**/
-		std::string str = ":localhost 451 :Set password first\r\n";
-		write(fd, str.c_str(), str.size());
-		_closeConnection(fd);
-		return ;
-	}
 	vector<string> splitMessageBuffer = split(user.userMessageBuffer, "\n");
-	for (vector<string>::iterator it = splitMessageBuffer.begin(); it != splitMessageBuffer.end(); it++) //handling pass command first
-	{	
-		if (it->find("pass") == 0 || it->find("PASS") == 0)
-		{
-			Request	userRequest(*this, *it);
-			map<string, string> input_map = userRequest.getRequestMap();
-			CommandHandler cmdHandler(*this, user, input_map);
-			splitMessageBuffer.erase(it);
-			break ;
-		}
-	}
-	if (user.getPassword() == this->getPassword())
-	{
-		for (vector<string>::iterator it = splitMessageBuffer.begin(); it != splitMessageBuffer.end(); it++)
-		{	
-			std::cout << MAGENTA << *it << RESET << std::endl;
-			Request	userRequest(*this, *it);
-			if ((userRequest.getCommand() != "NICK" && userRequest.getCommand() != "USER" && user.getNickName().empty()) || 
-				(userRequest.getCommand() != "NICK" && userRequest.getCommand() != "USER" && user.getUserName().empty()))
-				this->setBroadcast(ERR_NOTREGISTERED, user.getSocket());
-			map<string, string> input_map = userRequest.getRequestMap();
-			CommandHandler cmdHandler(*this, user, input_map);
-		}
-	}
-	else
-	{
-		/*DEBUG*/
-		std::cerr << RED << "Password wrong\n" << RESET;
-		/**/
-		std::string str = ERR_PASSWDMISMATCH;
-		write(fd, str.c_str(), str.size());
-		_closeConnection(fd);
-		return ;
+	// Vector is used to split the input message buffer by `\n` 
+	// this way one string in this vector is a command with its parameters
+	// The COMMANDS handled in CommandHandler so we just need to check if 
+	// the passed string is a valid command (exist in cmdToHandler map in CommandHandler)
+	for (size_t i = 0; i < splitMessageBuffer.size(); i++) {
+
+		std::cout << MAGENTA << splitMessageBuffer[i] << RESET << std::endl;
+		Request	userRequest(*this, splitMessageBuffer[i]);
+		map<string, string> input_map = userRequest.getRequestMap();
+		CommandHandler cmdHandler(*this, user, input_map);
 	}
 
-	_removeFromSet(fd, &_recv_fd_pool);
-	_addToSet(fd, &_send_fd_pool);
+	user.userMessageBuffer.clear();
+	// _removeFromSet(fd, &_recv_fd_pool);
+	// _addToSet(fd, &_send_fd_pool);
 }
 
 /*
@@ -216,8 +179,6 @@ void	ServerManager::_handle(int fd) {
 void	ServerManager::_respond(int fd) {
 
 	User &user = usersMap[fd];
-
-	UserResponse	userResponse(user, _server);
 
 	int		bytes_sent = 0;
 	int		bytes_to_send = user.responseBuffer.length();
@@ -232,8 +193,7 @@ void	ServerManager::_respond(int fd) {
 	}
 	else {
 		/* DEBUG */
-		std::cout << GREEN << "[+] Response sent to client fd:[" << fd << "]";
-		std::cout << "Response message: " << user.responseBuffer;
+		std::cout << GREEN << "Response to fd:[" << fd << "]: " << user.responseBuffer;
 		std::cout << ", bytes sent: [" << bytes_sent << "]" << RESET << std::endl;
 		std::cout << ". . . . . . . . . . . . . . . . . . . . . . . . . . . " << std::endl;
 		// std::cout << CYAN;
@@ -250,6 +210,12 @@ void	ServerManager::_respond(int fd) {
 		user.userMessageBuffer.clear();
 		user.responseBuffer.clear();
 	// }
+
+	/* NEW DEBUG */
+	if (user.getStatus() == DELETED) {
+		std::cout << RED << "[-] User Deleted. Closing connection, fd:[" << fd << "]" << RESET << std::endl;
+		_closeConnection(fd);
+	}
 }
 
 
@@ -262,6 +228,7 @@ void	ServerManager::_fcntl() {
 
 	fcntl_ret = fcntl(_serverFd, F_SETFL, O_NONBLOCK);
 	checkErrorAndExit(fcntl_ret, "fcntl() failed. Exiting..");
+
 
 	_addToSet(_serverFd, &_recv_fd_pool);
 }
@@ -406,12 +373,18 @@ int ServerManager::getFdbyNickName( const std::string& nickname ) const
 */
 void	ServerManager::setBroadcast(std::string channelName, std::string sender_nick, std::string msg) {
 
-	std::map<string, User>::iterator it;
+	std::map<string, User* >::iterator it = channelMap[channelName]._users.begin();
 
-	for (it = channelMap[channelName]._users.begin(); it != channelMap[channelName]._users.end(); it++) {
+	/* DEBUG */
+	// std::cout << RED << "\t[-] sender_nick: " << sender_nick << RESET << std::endl;
+	/* ***** */
 
-		if (it->second.getNickName() != sender_nick)
-			setBroadcast(msg, it->second.getSocket());
+	for ( ; it != channelMap[channelName]._users.end(); it++) {
+	/* DEBUG */
+	// std::cout << RED << "\t[-] it->second.getNickName(): [" << it->second->getNickName() << "] vs [" << sender_nick << "] sender_nick" << RESET << std::endl;
+	/* ***** */
+		if (it->second->getNickName() != sender_nick)
+			setBroadcast(msg, it->second->getSocket());
 	}
 }
 
@@ -421,12 +394,16 @@ void	ServerManager::setBroadcast(std::string channelName, std::string sender_nic
 void	ServerManager::setBroadcast(std::string msg, int fd) {
 
 	std::map<int, User>::iterator it = usersMap.find(fd);
-
+	if (it == usersMap.end())
+		return ;
 	// THE MESSAGE `msg` TO BE SENT MUST BE ALREADY PROPERLY FORMATTED..
 	// it->second.responseBuffer = it->second.getPrefix() + " PRIVMSG " + it->second.getChannel() + " :" + msg + "\r\n";
-	it->second.responseBuffer += msg;
+	if (it != usersMap.end()) {
+		it->second.responseBuffer += msg;
+	}
 
-	// _addToSet(fd, &_send_fd_pool);
+	_removeFromSet(fd, &_recv_fd_pool);
+	_addToSet(fd, &_send_fd_pool);
 }
 
 /*
@@ -437,8 +414,7 @@ void	ServerManager::setBroadcast(std::string msg, int fd) {
 ServerManager*	ServerManager::SM_instance = NULL;
 
 void	ServerManager::signalhandler(int signal) {
-
-	std::cout << RED << "\t[-] Signal received [" << signal << "] Exiting.." << RESET << std::endl;
+	(void)signal;
 
 	if (SM_instance != NULL) {
 		SM_instance->handleSignal();
@@ -446,7 +422,7 @@ void	ServerManager::signalhandler(int signal) {
 }
 
 void	ServerManager::handleSignal() {
-
+	std::cout << RED << "\t[-] Signal received. " << RESET << std::endl;
 	// Closing all available connections, cleaning up and terminating the main loop..
 
 	for (int fd = _max_fd; fd >= _serverFd; fd--) {

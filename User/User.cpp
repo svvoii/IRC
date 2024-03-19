@@ -10,6 +10,7 @@ User::User() :
 	_userName(""), 
 	_realName(""),
 	_password(""), 
+	_status(PASS_NEEDED),
 	userMessageBuffer(""),
 	responseBuffer(""),
 	_authenticated(false), 
@@ -58,6 +59,8 @@ User::~User()
 
 // --------------------------------------- SETTERS ---------------------------------------- // 
 
+void	User::setStatus(e_status status) { _status = status; }
+
 void	User::setAuthenticated(bool authenticated)
 { this->_authenticated = authenticated; }
 
@@ -102,7 +105,7 @@ void	User::setChannel(Channel& channel)
 {
 	if (_channels.find(channel.getName()) != _channels.end()) // si le channel est deja dans User
 		return;
-	_channels.insert(std::make_pair(channel.getName(), channel));
+	_channels[channel.getName()] = &channel;
 }
 
 void	User::setAsBot()
@@ -116,6 +119,8 @@ void	User::setPinged(bool pinged)
 }
 
 // ---------------------------------------- GETTERS ----------------------------------------- // 
+
+e_status	User::getStatus() { return _status; }
 
 bool	User::authenticated() { return this->_authenticated; }
 
@@ -160,8 +165,8 @@ const std::string& User::getPassword( void ) const
 
 Channel& User::getChannel( const std::string& name )
 {
-	std::map<std::string, Channel>::iterator it = _channels.find(name);
-	return it->second;
+	std::map<std::string, Channel*>::iterator it = _channels.find(name);
+	return *it->second;
 }
 
 // fonction membres 
@@ -177,7 +182,7 @@ std::string	User::getPrefix()
 
 void	User::removeChannel(const std::string& channelName)
 {
-	std::map<std::string, Channel>::iterator it;
+	std::map<std::string, Channel*>::iterator it;
 	it = _channels.find(channelName);
     if (it != _channels.end())
         _channels.erase(it);
@@ -185,9 +190,9 @@ void	User::removeChannel(const std::string& channelName)
 
 void User::printChannels( void ) const
 {
-	std::map<std::string, Channel>::const_iterator it;
+	std::map<std::string, Channel*>::const_iterator it;
 
     std::cout << "Channels in this user:" << std::endl;
     for ( it = _channels.begin(); it != _channels.end(); ++it)
-        std::cout << it->second.getName() << std::endl;
+        std::cout << it->second->getName() << std::endl;
 }

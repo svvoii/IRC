@@ -68,7 +68,6 @@ class CommandHandler {
 		// This method will return enum representation of the string command..
 		e_cmd				getCMD(const std::string & str); // enum requestCMD
 
-		void				authenticateUser();
 		void				executeCommand();
 
 		// COMMAND HANDLERS
@@ -85,6 +84,7 @@ class CommandHandler {
 		void				handleINVITE();
 		void				handleTOPIC();
 		void				handlePART();
+		void				handleQUIT();
 	
 		//COMMAND UTILS
 		const std::string	parse_channelName(std::string& channelName);

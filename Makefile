@@ -1,7 +1,7 @@
 
 NAME = ircserv
 
-CXX = c++
+CXX = g++
 CXXFLAGS = -Wall -Werror -Wextra -std=c++98 -g
 
 VPATH = Server \
@@ -17,7 +17,6 @@ SRCS = main.cpp \
 	UserRequestParsing.cpp \
 	CommandHandler.cpp \
 	ModeHandler.cpp \
-	UserResponse.cpp \
 	Channel.cpp \
 	Request.cpp \
 	User.cpp
