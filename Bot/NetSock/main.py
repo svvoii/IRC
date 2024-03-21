@@ -3,10 +3,6 @@
 
 import os
 import socket
-from openai import OpenAI
-
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -33,29 +29,10 @@ while True:
 			print(f"Received from client: {prompt}")
 
 			if prompt:
-				# Decoding the prompt from bytes to string
-				prompt_str = prompt.decode('utf-8').strip()
-
-				response = client.chat.completions.create(
-					model="gpt-3.5-turbo",
-					messages=[
-						{"role": "system", "content": "You are a helpful assistant that answers questions from users in a helpdesk chat. Your answers conscise and straight to the point. You are using strong bro-like language."},
-						{"role": "user", "content": prompt_str}
-					],
-					temperature=0.7,
-					max_tokens=50,
-				)
-
-				text_to_send = response.choices[0].message.content
-				
-				print(f"Sending response back to the client: {text_to_send}\n")
-				connection.sendall(text_to_send.encode('utf-8'))
-
-				
-				# print(f"Sending prompt back to the client: {prompt}\n")
-				# connection.sendall(prompt)
+				print(f"Sending prompt back to the client: {prompt}")
+				connection.sendall(prompt)
 			else:
-				print("No more prompt from client\n")
+				print("No more prompt from client")
 				break
 
 	finally:
